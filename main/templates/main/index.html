@@ -1,0 +1,245 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Translator App</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{% static 'main/style.css' %}" />
+</head>
+<body>
+
+  <!-- ── HEADER ── -->
+  <header class="header">
+    <div class="header-icon">
+      <svg viewBox="0 0 24 24">
+        <path d="M5 8l6 6"/>
+        <path d="M4 14s1-1 2-1 3 2 4 2 2-1 2-1"/>
+        <path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/>
+        <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7"/>
+        <path d="M12 3v18"/>
+      </svg>
+    </div>
+    <h1>Language <span>Translator</span></h1>
+    <p>Translate text into 20+ languages instantly</p>
+  </header>
+
+  <!-- ── MAIN CARD ── -->
+  <div class="card">
+    <form method="post" id="translateForm">
+      {% csrf_token %}
+
+      <!-- Input Text -->
+      <div class="form-group">
+        <label class="form-label" for="translateInput">Enter Text</label>
+        <div class="textarea-wrapper">
+          <textarea
+            id="translateInput"
+            name="translate"
+            placeholder="Type something to translate…"
+            maxlength="500"
+            required
+          >{{ input_text }}</textarea>
+          <span class="char-count" id="charCount">0 / 500</span>
+        </div>
+      </div>
+
+      <!-- Language Select + Button -->
+      <div class="controls-row">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label" for="languageSelect">Target Language</label>
+          <div class="select-wrapper">
+            <select id="languageSelect" name="language" required>
+              {% for code, name in languages %}
+                <option value="{{ code }}" {% if selected_language == code %}selected{% endif %}>
+                  {{ name }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <button class="btn-translate" type="submit" id="translateBtn">
+          <svg class="arrow-icon" viewBox="0 0 24 24">
+            <path d="M5 12h14"/>
+            <path d="m12 5 7 7-7 7"/>
+          </svg>
+          <span class="btn-text">Translate</span>
+          <span class="spinner"></span>
+        </button>
+      </div>
+    </form>
+
+    <!-- Output -->
+    <div class="output-section">
+      <div class="output-header">
+        <span class="output-label">Translation</span>
+        {% if translated_text and not translated_text|slice:":19" == "Translation error:" %}
+          <span class="output-badge">Done</span>
+        {% endif %}
+      </div>
+
+      {% if translated_text %}
+        {% if "Translation error:" in translated_text %}
+          <div class="output-error">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            {{ translated_text }}
+          </div>
+        {% else %}
+          <div class="output-box has-content" id="outputBox">
+            <p class="output-text" id="outputText">{{ translated_text }}</p>
+            <button class="btn-copy" id="copyBtn" onclick="copyText()" title="Copy to clipboard">
+              <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy
+            </button>
+          </div>
+        {% endif %}
+      {% else %}
+        <div class="output-box" id="outputBox">
+          <p class="output-placeholder" id="outputText">Your translation will appear here…</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── HISTORY SECTION ── -->
+  <div class="history-section">
+    <div class="history-header">
+      <span class="history-title">Recent Translations</span>
+      <button class="btn-clear-history" onclick="clearHistory()">Clear all</button>
+    </div>
+    <div class="history-list" id="historyList">
+      <p class="history-empty" id="historyEmpty">No translations yet</p>
+    </div>
+  </div>
+
+  <!-- ── FOOTER ── -->
+  <footer class="footer">
+    Built with Django &amp; Python translate library
+  </footer>
+
+  <!-- ── JAVASCRIPT ── -->
+  <script>
+    // ── Char counter ──────────────────────────────────
+    const textarea = document.getElementById('translateInput');
+    const charCount = document.getElementById('charCount');
+
+    function updateCharCount() {
+      const len = textarea.value.length;
+      charCount.textContent = `${len} / 500`;
+      charCount.classList.toggle('warning', len > 400);
+    }
+
+    textarea.addEventListener('input', updateCharCount);
+    updateCharCount(); // init on load
+
+    // ── Loading state on submit ───────────────────────
+    const form = document.getElementById('translateForm');
+    const btn  = document.getElementById('translateBtn');
+
+    form.addEventListener('submit', () => {
+      btn.classList.add('loading');
+    });
+
+    // ── Copy button ───────────────────────────────────
+    function copyText() {
+      const text = document.getElementById('outputText').textContent;
+      if (!text || text.includes('Your translation')) return;
+
+      navigator.clipboard.writeText(text).then(() => {
+        const copyBtn = document.getElementById('copyBtn');
+        if (!copyBtn) return;
+        copyBtn.classList.add('copied');
+        copyBtn.innerHTML = `
+          <svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          Copied!
+        `;
+        setTimeout(() => {
+          copyBtn.classList.remove('copied');
+          copyBtn.innerHTML = `
+            <svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            Copy
+          `;
+        }, 2000);
+      }).catch(() => {
+        // Fallback for older browsers
+        const el = document.createElement('textarea');
+        el.value = text;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      });
+    }
+
+    // ── Translation History (localStorage) ───────────
+    const HISTORY_KEY = 'translator_history';
+
+    function getHistory() {
+      try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+      catch { return []; }
+    }
+
+    function saveHistory(history) {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    }
+
+    function renderHistory() {
+      const history = getHistory();
+      const list    = document.getElementById('historyList');
+      const empty   = document.getElementById('historyEmpty');
+
+      if (history.length === 0) {
+        list.innerHTML = '<p class="history-empty" id="historyEmpty">No translations yet</p>';
+        return;
+      }
+
+      list.innerHTML = history.slice(0, 5).map(item => `
+        <div class="history-item">
+          <span class="history-original" title="${item.original}">${item.original}</span>
+          <span class="history-arrow">→</span>
+          <span class="history-translated">
+            ${item.translated}
+            <span class="history-lang-tag">${item.lang}</span>
+          </span>
+        </div>
+      `).join('');
+    }
+
+    function clearHistory() {
+      localStorage.removeItem(HISTORY_KEY);
+      renderHistory();
+    }
+
+    // Save current translation to history on page load
+    {% if translated_text and "Translation error:" not in translated_text %}
+      (function() {
+        const original   = `{{ input_text|escapejs }}`;
+        const translated = `{{ translated_text|escapejs }}`;
+        const lang       = document.getElementById('languageSelect');
+        const langName   = lang ? lang.options[lang.selectedIndex].text : '{{ selected_language }}';
+
+        if (original && translated) {
+          const history = getHistory();
+          // Avoid duplicate back-to-back entries
+          if (!history.length || history[0].original !== original || history[0].translated !== translated) {
+            history.unshift({ original, translated, lang: langName });
+            saveHistory(history.slice(0, 20));
+          }
+        }
+      })();
+    {% endif %}
+
+    renderHistory();
+  </script>
+
+</body>
+</html>
